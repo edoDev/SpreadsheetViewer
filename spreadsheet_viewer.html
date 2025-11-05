@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spreadsheet Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        body.dark {
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        body.light {
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            padding: 20px;
+            border-bottom: 2px solid;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .dark .header {
+            background-color: #2d2d2d;
+            border-color: #404040;
+        }
+
+        .light .header {
+            background-color: #fff;
+            border-color: #ddd;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .dark .btn-primary {
+            background-color: #4a9eff;
+            color: white;
+        }
+
+        .dark .btn-primary:hover {
+            background-color: #3d8fef;
+        }
+
+        .light .btn-primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .light .btn-primary:hover {
+            background-color: #0056b3;
+        }
+
+        .dark .btn-secondary {
+            background-color: #404040;
+            color: #e0e0e0;
+        }
+
+        .dark .btn-secondary:hover {
+            background-color: #505050;
+        }
+
+        .light .btn-secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .light .btn-secondary:hover {
+            background-color: #5a6268;
+        }
+
+        .theme-toggle {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .switch {
+            position: relative;
+            width: 50px;
+            height: 24px;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s;
+            border-radius: 24px;
+        }
+
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        input:checked + .slider {
+            background-color: #4a9eff;
+        }
+
+        input:checked + .slider:before {
+            transform: translateX(26px);
+        }
+
+        .container {
+            padding: 20px;
+            overflow-x: auto;
+        }
+
+        .table-wrapper {
+            overflow-x: auto;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 600px;
+        }
+
+        .dark table {
+            background-color: #2d2d2d;
+        }
+
+        .light table {
+            background-color: white;
+        }
+
+        th {
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .dark th {
+            background-color: #3d3d3d;
+            border-bottom: 2px solid #505050;
+        }
+
+        .light th {
+            background-color: #f8f9fa;
+            border-bottom: 2px solid #dee2e6;
+        }
+
+        th:hover {
+            opacity: 0.8;
+        }
+
+        th::after {
+            content: '⇅';
+            position: absolute;
+            right: 30px;
+            opacity: 0.3;
+            font-size: 12px;
+        }
+
+        th.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+        }
+
+        th.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+        }
+
+        .dedupe-btn-small {
+            padding: 4px 8px;
+            font-size: 11px;
+            margin-left: 8px;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .dark .dedupe-btn-small {
+            background-color: #505050;
+            color: #e0e0e0;
+        }
+
+        .dark .dedupe-btn-small:hover {
+            background-color: #606060;
+        }
+
+        .light .dedupe-btn-small {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+
+        .light .dedupe-btn-small:hover {
+            background-color: #dee2e6;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid;
+        }
+
+        .dark td {
+            border-color: #404040;
+        }
+
+        .light td {
+            border-color: #e9ecef;
+        }
+
+        .dark tr:hover {
+            background-color: #353535;
+        }
+
+        .light tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            opacity: 0.6;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .error {
+            background-color: #dc3545;
+            color: white;
+            padding: 15px;
+            margin: 20px;
+            border-radius: 6px;
+        }
+
+        .info {
+            padding: 10px;
+            margin: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .dark .info {
+            background-color: #2d4a5c;
+            color: #a8d8ff;
+        }
+
+        .light .info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body class="dark">
+    <div class="header">
+        <h1>📊 Spreadsheet Viewer</h1>
+        <div class="controls">
+            <div class="file-input-wrapper">
+                <label for="fileInput" class="btn btn-primary">
+                    📁 Choose File
+                </label>
+                <input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.ods,.tsv">
+            </div>
+            <button id="resetBtn" class="btn btn-secondary" style="display:none;">
+                ↺ Reset Data
+            </button>
+            <div class="theme-toggle">
+                <span>☀️</span>
+                <label class="switch">
+                    <input type="checkbox" id="themeToggle" checked>
+                    <span class="slider"></span>
+                </label>
+                <span>🌙</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="info" class="info" style="display:none;"></div>
+    <div id="error" class="error" style="display:none;"></div>
+
+    <div class="container">
+        <div id="emptyState" class="empty-state">
+            <div class="empty-state-icon">📄</div>
+            <h2>No file loaded</h2>
+            <p>Upload a CSV, Excel (XLSX/XLS), ODS, or TSV file to get started</p>
+        </div>
+        <div id="tableContainer" style="display:none;"></div>
+    </div>
+
+    <script>
+        let currentData = [];
+        let originalData = [];
+        let headers = [];
+
+        const fileInput = document.getElementById('fileInput');
+        const themeToggle = document.getElementById('themeToggle');
+        const resetBtn = document.getElementById('resetBtn');
+        const tableContainer = document.getElementById('tableContainer');
+        const emptyState = document.getElementById('emptyState');
+        const errorDiv = document.getElementById('error');
+        const infoDiv = document.getElementById('info');
+
+        // Theme toggle
+        themeToggle.addEventListener('change', (e) => {
+            document.body.className = e.target.checked ? 'dark' : 'light';
+        });
+
+        // File input handler
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            errorDiv.style.display = 'none';
+            infoDiv.style.display = 'none';
+
+            const fileExt = file.name.split('.').pop().toLowerCase();
+
+            if (fileExt === 'csv' || fileExt === 'tsv') {
+                readCSV(file, fileExt === 'tsv' ? '\t' : ',');
+            } else if (['xlsx', 'xls', 'ods'].includes(fileExt)) {
+                readExcel(file);
+            } else {
+                showError('Unsupported file format. Please use CSV, TSV, XLSX, XLS, or ODS files.');
+            }
+        });
+
+        // Read CSV/TSV files
+        function readCSV(file, delimiter) {
+            Papa.parse(file, {
+                delimiter: delimiter,
+                skipEmptyLines: true,
+                complete: (results) => {
+                    if (results.data && results.data.length > 0) {
+                        headers = results.data[0];
+                        originalData = results.data.slice(1);
+                        currentData = JSON.parse(JSON.stringify(originalData));
+                        renderTable();
+                        resetBtn.style.display = 'inline-block';
+                    } else {
+                        showError('No data found in file');
+                    }
+                },
+                error: (error) => {
+                    showError('Error reading file: ' + error.message);
+                }
+            });
+        }
+
+        // Read Excel files
+        function readExcel(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                    if (jsonData && jsonData.length > 0) {
+                        headers = jsonData[0];
+                        originalData = jsonData.slice(1);
+                        currentData = JSON.parse(JSON.stringify(originalData));
+                        renderTable();
+                        resetBtn.style.display = 'inline-block';
+                    } else {
+                        showError('No data found in file');
+                    }
+                } catch (error) {
+                    showError('Error reading Excel file: ' + error.message);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Render table
+        function renderTable() {
+            if (!currentData || currentData.length === 0) {
+                emptyState.style.display = 'block';
+                tableContainer.style.display = 'none';
+                return;
+            }
+
+            emptyState.style.display = 'none';
+            tableContainer.style.display = 'block';
+
+            let html = '<div class="table-wrapper"><table><thead><tr>';
+            headers.forEach((header, index) => {
+                html += `<th data-col="${index}">
+                    ${header || 'Column ' + (index + 1)}
+                    <button class="dedupe-btn-small" data-dedupe-col="${index}">✓ Dedupe</button>
+                </th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            currentData.forEach(row => {
+                html += '<tr>';
+                headers.forEach((_, index) => {
+                    html += `<td>${row[index] !== undefined ? row[index] : ''}</td>`;
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table></div>';
+            tableContainer.innerHTML = html;
+
+            // Add sort listeners
+            document.querySelectorAll('th').forEach(th => {
+                th.addEventListener('click', (e) => {
+                    // Don't sort if clicking dedupe button
+                    if (e.target.classList.contains('dedupe-btn-small')) {
+                        return;
+                    }
+                    sortColumn(parseInt(th.dataset.col), th);
+                });
+            });
+
+            // Add dedupe listeners
+            document.querySelectorAll('.dedupe-btn-small').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    deduplicateColumn(parseInt(btn.dataset.dedupeCol));
+                });
+            });
+        }
+
+        // Sort column
+        function sortColumn(colIndex, thElement) {
+            const currentSort = thElement.className;
+            
+            // Remove sort classes from all headers
+            document.querySelectorAll('th').forEach(th => {
+                th.className = '';
+            });
+
+            // Determine sort direction
+            let sortAsc = true;
+            if (currentSort === 'sort-asc') {
+                sortAsc = false;
+                thElement.className = 'sort-desc';
+            } else {
+                thElement.className = 'sort-asc';
+            }
+
+            // Sort data
+            currentData.sort((a, b) => {
+                let valA = a[colIndex] !== undefined ? a[colIndex] : '';
+                let valB = b[colIndex] !== undefined ? b[colIndex] : '';
+
+                // Try to parse as numbers
+                const numA = parseFloat(valA);
+                const numB = parseFloat(valB);
+
+                if (!isNaN(numA) && !isNaN(numB)) {
+                    return sortAsc ? numA - numB : numB - numA;
+                }
+
+                // String comparison
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
+
+                if (sortAsc) {
+                    return valA.localeCompare(valB);
+                } else {
+                    return valB.localeCompare(valA);
+                }
+            });
+
+            renderTable();
+        }
+
+        // Remove duplicates from specific column
+        function deduplicateColumn(colIndex) {
+            if (!currentData || currentData.length === 0) return;
+
+            const seen = new Set();
+            const dedupedData = [];
+
+            currentData.forEach(row => {
+                const cellValue = row[colIndex] !== undefined ? String(row[colIndex]) : '';
+                
+                if (!seen.has(cellValue)) {
+                    seen.add(cellValue);
+                    dedupedData.push(row);
+                }
+            });
+
+            const removedCount = currentData.length - dedupedData.length;
+            currentData = dedupedData;
+            renderTable();
+
+            const columnName = headers[colIndex] || `Column ${colIndex + 1}`;
+            if (removedCount > 0) {
+                showInfo(`Removed ${removedCount} duplicate row${removedCount !== 1 ? 's' : ''} from "${columnName}"`);
+            } else {
+                showInfo(`No duplicates found in "${columnName}"`);
+            }
+        }
+
+        // Reset to original data
+        resetBtn.addEventListener('click', () => {
+            if (originalData.length > 0) {
+                currentData = JSON.parse(JSON.stringify(originalData));
+                renderTable();
+                showInfo('Data reset to original');
+            }
+        });
+
+        // Show error
+        function showError(message) {
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Show info
+        function showInfo(message) {
+            infoDiv.textContent = message;
+            infoDiv.style.display = 'block';
+            setTimeout(() => {
+                infoDiv.style.display = 'none';
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
